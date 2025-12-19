@@ -1,0 +1,10 @@
+{% extends 'vacancies/base.html' %}
+
+{% block content %}
+<h2>Импорт вакансий</h2>
+<form method="post">
+    {% csrf_token %}
+    {{ import_form.as_p }}
+    <button type="submit">Импортировать</button>
+</form>
+{% endblock %}
