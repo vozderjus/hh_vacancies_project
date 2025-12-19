@@ -390,6 +390,9 @@ def api_vacancy_search(request):
     return JsonResponse({'error': 'Invalid request method'}, status=400)
 
 
+def my_view(request):
+    queries = ['Python', 'JavaScript', 'Java', 'C#', 'PHP', 'Go', 'Data Science', 'DevOps']
+    return render(request, 'home.html', {'queries': queries})
 def api_get_statistics(request):
     """API для получения статистики"""
     stats = {

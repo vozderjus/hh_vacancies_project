@@ -1,202 +1,31 @@
+<!-- vacancies/templates/vacancies/home.html -->
 {% extends 'vacancies/base.html' %}
 
 {% block title %}Главная - HH Вакансии{% endblock %}
 
-{% block page_title %}Найдите работу мечты{% endblock %}
+{% block page_title %}Добро пожаловать в HH Вакансии!{% endblock %}
 
 {% block page_subtitle %}
 <p class="lead">Поиск и анализ вакансий с HeadHunter API</p>
 {% endblock %}
 
-{% block breadcrumb_items %}
-<li class="breadcrumb-item active">Главная</li>
-{% endblock %}
-
 {% block content %}
 <div class="row">
-    <!-- Левая колонка -->
-    <div class="col-lg-8">
-        <!-- Быстрый поиск -->
-        <div class="card card-modern mb-4">
+    <div class="col-md-8">
+        <div class="card card-modern">
             <div class="card-header card-header-modern">
-                <h5 class="mb-0"><i class="bi bi-search"></i> Быстрый поиск вакансий</h5>
+                <h5 class="mb-0"><i class="bi bi-search"></i> Начните поиск</h5>
             </div>
             <div class="card-body">
-                <form method="get" action="{% url 'vacancy_list' %}" class="row g-3">
-                    <div class="col-md-8">
-                        <input type="text" name="q" class="form-control form-control-custom" 
-                               placeholder="Python разработчик, менеджер проектов, дизайнер...">
-                    </div>
-                    <div class="col-md-4">
-                        <button type="submit" class="btn btn-custom-primary w-100">
+                <form method="get" action="{% url 'vacancy_list' %}">
+                    <div class="input-group">
+                        <input type="text" class="form-control form-control-custom" 
+                               name="q" placeholder="Введите профессию или навык...">
+                        <button class="btn btn-custom-primary" type="submit">
                             <i class="bi bi-search"></i> Найти
                         </button>
                     </div>
                 </form>
-                
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <p class="text-muted mb-2">Популярные запросы:</p>
-                        <div class="d-flex flex-wrap gap-2">
-                            {% for query in ['Python', 'JavaScript', 'Java', 'C#', 'PHP', 'Go', 'Data Science', 'DevOps'] %}
-                            <a href="{% url 'vacancy_list' %}?q={{ query }}" 
-                               class="badge bg-light text-dark text-decoration-none hover-lift">
-                                {{ query }}
-                            </a>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Последние вакансии -->
-        {% if recent_vacancies %}
-        <div class="card card-modern mb-4">
-            <div class="card-header card-header-modern">
-                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние вакансии</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    {% for vacancy in recent_vacancies|slice:":6" %}
-                    <div class="col-md-6 mb-3">
-                        <div class="card vacancy-card h-100">
-                            <div class="card-body">
-                                <h6 class="card-title">{{ vacancy.name|truncatechars:50 }}</h6>
-                                <p class="card-text text-muted small mb-2">
-                                    <i class="bi bi-building"></i> {{ vacancy.employer_name|truncatechars:30 }}
-                                </p>
-                                
-                                {% if vacancy.salary_from or vacancy.salary_to %}
-                                <div class="mb-2">
-                                    <span class="salary-badge">
-                                        {% if vacancy.salary_from and vacancy.salary_to %}
-                                            {{ vacancy.salary_from|floatformat:0 }} - {{ vacancy.salary_to|floatformat:0 }} ₽
-                                        {% elif vacancy.salary_from %}
-                                            от {{ vacancy.salary_from|floatformat:0 }} ₽
-                                        {% elif vacancy.salary_to %}
-                                            до {{ vacancy.salary_to|floatformat:0 }} ₽
-                                        {% endif %}
-                                    </span>
-                                </div>
-                                {% endif %}
-                                
-                                <div class="small text-muted mb-3">
-                                    <div><i class="bi bi-geo-alt"></i> {{ vacancy.area|default:"Не указано" }}</div>
-                                    <div><i class="bi bi-calendar"></i> {{ vacancy.published_at|date:"d.m.Y" }}</div>
-                                </div>
-                                
-                                <a href="{% url 'vacancy_detail' vacancy.hh_id %}" 
-                                   class="btn btn-outline-primary btn-sm">
-                                    Подробнее
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                
-                <div class="text-center mt-3">
-                    <a href="{% url 'vacancy_list' %}" class="btn btn-custom-primary">
-                        <i class="bi bi-list-ul"></i> Все вакансии
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% else %}
-        <div class="card card-modern">
-            <div class="card-body text-center py-5">
-                <i class="bi bi-cloud-upload display-1 text-muted mb-3"></i>
-                <h4>База вакансий пуста</h4>
-                <p class="text-muted">Импортируйте первые вакансии для начала работы</p>
-                <a href="{% url 'import_vacancies' %}" class="btn btn-custom-primary">
-                    <i class="bi bi-cloud-download"></i> Импортировать вакансии
-                </a>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- Правая колонка -->
-    <div class="col-lg-4">
-        <!-- Статистика -->
-        <div class="card card-modern mb-4">
-            <div class="card-header card-header-modern">
-                <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Статистика</h5>
-            </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-6 mb-3">
-                        <div class="display-6 fw-bold text-primary">{{ total_vacancies|default:0 }}</div>
-                        <div class="text-muted small">Вакансий</div>
-                    </div>
-                    <div class="col-6 mb-3">
-                        <div class="display-6 fw-bold text-success">{{ total_employers|default:0 }}</div>
-                        <div class="text-muted small">Работодателей</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="display-6 fw-bold text-warning">{{ avg_salary_from|default:0|floatformat:0 }}₽</div>
-                        <div class="text-muted small">Средняя з/п</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="display-6 fw-bold text-info">{{ avg_salary_to|default:0|floatformat:0 }}₽</div>
-                        <div class="text-muted small">Максимум</div>
-                    </div>
-                </div>
-                
-                <div class="text-center mt-3">
-                    <a href="{% url 'statistics' %}" class="btn btn-outline-primary btn-sm w-100">
-                        <i class="bi bi-graph-up"></i> Подробная статистика
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Быстрый импорт -->
-        <div class="card card-modern mb-4">
-            <div class="card-header card-header-modern">
-                <h5 class="mb-0"><i class="bi bi-cloud-download"></i> Быстрый импорт</h5>
-            </div>
-            <div class="card-body">
-                <form method="post" action="{% url 'import_vacancies' %}">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label class="form-label">Ключевые слова</label>
-                        <input type="text" name="search_query" class="form-control form-control-custom" 
-                               placeholder="Python, JavaScript, Java..." required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Количество</label>
-                        <input type="number" name="count" class="form-control form-control-custom" 
-                               value="20" min="1" max="50">
-                    </div>
-                    <button type="submit" class="btn btn-custom-primary w-100">
-                        <i class="bi bi-download"></i> Импортировать
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Быстрые ссылки -->
-        <div class="card card-modern">
-            <div class="card-header card-header-modern">
-                <h5 class="mb-0"><i class="bi bi-lightning"></i> Быстрые действия</h5>
-            </div>
-            <div class="card-body">
-                <div class="list-group list-group-flush">
-                    <a href="{% url 'search' %}" class="list-group-item list-group-item-action border-0 py-3">
-                        <i class="bi bi-search me-2"></i> Расширенный поиск
-                    </a>
-                    <a href="{% url 'vacancy_list' %}" class="list-group-item list-group-item-action border-0 py-3">
-                        <i class="bi bi-filter me-2"></i> Все вакансии с фильтрами
-                    </a>
-                    <a href="{% url 'import_vacancies' %}" class="list-group-item list-group-item-action border-0 py-3">
-                        <i class="bi bi-database me-2"></i> Загрузить новые данные
-                    </a>
-                    <a href="{% url 'statistics' %}" class="list-group-item list-group-item-action border-0 py-3">
-                        <i class="bi bi-pie-chart me-2"></i> Аналитика рынка
-                    </a>
-                </div>
             </div>
         </div>
     </div>
