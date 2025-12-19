@@ -1,0 +1,158 @@
+{% extends 'vacancies/base.html' %}
+
+{% block title %}Все вакансии - HH Вакансии{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">
+    <i class="fas fa-list"></i> Все вакансии
+    <span class="badge bg-secondary">{{ total_count }}</span>
+</h2>
+
+<!-- Форма фильтрации -->
+<div class="search-form">
+    <form method="get" class="row g-3">
+        <div class="col-md-4">
+            <label class="form-label">Ключевые слова</label>
+            {{ search_form.query }}
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Регион</label>
+            {{ search_form.area }}
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Опыт</label>
+            {{ search_form.experience }}
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Занятость</label>
+            {{ search_form.employment }}
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Зарплата от</label>
+            {{ search_form.salary_from }}
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Зарплата до</label>
+            {{ search_form.salary_to }}
+        </div>
+        <div class="col-12">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-filter"></i> Применить фильтры
+            </button>
+            <a href="{% url 'vacancy_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-times"></i> Сбросить
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Информация о результатах -->
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i>
+    Найдено {{ filtered_count }} вакансий из {{ total_count }}
+</div>
+
+<!-- Список вакансий -->
+<div class="row">
+    {% for vacancy in page_obj %}
+    <div class="col-md-6">
+        <div class="vacancy-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <h5 class="card-title">{{ vacancy.name }}</h5>
+                    <span class="badge bg-primary">{{ vacancy.employment }}</span>
+                </div>
+                
+                <h6 class="card-subtitle mb-2 text-muted">
+                    <i class="fas fa-building"></i> {{ vacancy.employer_name }}
+                </h6>
+                
+                {% if vacancy.get_salary_display != "Не указана" %}
+                <div class="mb-2">
+                    <span class="salary-badge">
+                        <i class="fas fa-money-bill-wave"></i> {{ vacancy.get_salary_display }}
+                    </span>
+                </div>
+                {% endif %}
+                
+                <div class="mb-2">
+                    <small class="text-muted">
+                        <i class="fas fa-map-marker-alt"></i> {{ vacancy.area }}
+                        <i class="fas fa-briefcase ms-2"></i> {{ vacancy.experience }}
+                        <i class="fas fa-clock ms-2"></i> {{ vacancy.published_at|date:"d.m.Y" }}
+                    </small>
+                </div>
+                
+                <div class="vacancy-description">
+                    {{ vacancy.description|truncatewords:50|safe }}
+                </div>
+                
+                <!-- Ключевые навыки -->
+                {% if vacancy.key_skills %}
+                <div class="mb-3">
+                    {% for skill in vacancy.key_skills|slice:":5" %}
+                    <span class="skill-badge">{{ skill }}</span>
+                    {% endfor %}
+                    {% if vacancy.key_skills|length > 5 %}
+                    <span class="skill-badge">+{{ vacancy.key_skills|length|add:"-5" }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'vacancy_detail' vacancy.hh_id %}" class="btn btn-primary">
+                        <i class="fas fa-eye"></i> Подробнее
+                    </a>
+                    <a href="{{ vacancy.alternate_url }}" target="_blank" class="btn btn-outline-secondary">
+                        <i class="fab fa-hacker-news"></i> На HH
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i>
+            Вакансии не найдены. Попробуйте изменить параметры поиска или 
+            <a href="{% url 'import_vacancies' %}">импортировать вакансии</a>.
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Пагинация -->
+{% if page_obj.has_other_pages %}
+<nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                <i class="fas fa-chevron-left"></i>
+            </a>
+        </li>
+        {% endif %}
+        
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <li class="page-item active">
+                <span class="page-link">{{ num }}</span>
+            </li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                <i class="fas fa-chevron-right"></i>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}
