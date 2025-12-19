@@ -1,4 +1,5 @@
 import requests
+import time
 from datetime import datetime
 from typing import Dict, List, Optional
 from django.db import transaction
@@ -7,204 +8,284 @@ from .models import Vacancy, SearchQuery
 
 
 class HHApiService:
-    """Сервис для реальной работы с HH API"""
+    """Сервис для работы с HH API с реальными запросами"""
     
-    BASE_URL = "https://api.hh.ru/vacancies"
+    BASE_URL = "https://api.hh.ru"
     
-    @staticmethod
-    def fetch_vacancies(params: Dict) -> Dict:
-        """Получение вакансий с HH API"""
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'HH-Vacancies-Project/1.0 (contact@example.com)',
+            'Accept': 'application/json'
+        })
+    
+    def search_vacancies(self, params: Dict) -> Dict:
+        """Поиск вакансий"""
         try:
-            response = requests.get(
-                HHApiService.BASE_URL,
+            response = self.session.get(
+                f"{self.BASE_URL}/vacancies",
                 params=params,
-                headers={'User-Agent': 'HH-Vacancies-App/1.0'},
+                timeout=15
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Ошибка при поиске вакансий: {e}")
+            return {"items": [], "found": 0, "pages": 0}
+    
+    def get_vacancy_details(self, vacancy_id: int) -> Optional[Dict]:
+        """Получение деталей вакансии"""
+        try:
+            response = self.session.get(
+                f"{self.BASE_URL}/vacancies/{vacancy_id}",
                 timeout=10
             )
             response.raise_for_status()
             return response.json()
-        except requests.RequestException as e:
-            print(f"Ошибка API: {e}")
-            return {"items": [], "found": 0, "pages": 0}
-    
-    @staticmethod
-    def fetch_vacancy_details(vacancy_id: int) -> Optional[Dict]:
-        """Получение детальной информации о вакансии"""
-        try:
-            response = requests.get(
-                f"{HHApiService.BASE_URL}/{vacancy_id}",
-                headers={'User-Agent': 'HH-Vacancies-App/1.0'},
-                timeout=5
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
-            print(f"Ошибка получения деталей: {e}")
+        except requests.exceptions.RequestException as e:
+            print(f"Ошибка при получении вакансии {vacancy_id}: {e}")
             return None
     
-    @staticmethod
-    def process_and_save_vacancies(search_params: Dict) -> Dict:
-        """Обработка и сохранение вакансий"""
+    def get_dictionaries(self):
+        """Получение справочников HH"""
+        try:
+            response = self.session.get(f"{self.BASE_URL}/dictionaries", timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except:
+            return {}
+    
+    def import_vacancies(self, search_params: Dict) -> Dict:
+        """Импорт вакансий с сохранением в БД"""
+        
+        # Подготавливаем параметры
+        params = {
+            'text': search_params.get('text', ''),
+            'area': search_params.get('area', '113'),  # Россия по умолчанию
+            'per_page': min(search_params.get('per_page', 20), 100),  # HH ограничивает 100
+            'page': search_params.get('page', 0),
+            'only_with_salary': search_params.get('only_with_salary', False),
+            'order_by': search_params.get('order_by', 'relevance')
+        }
+        
+        # Добавляем дополнительные фильтры
+        if search_params.get('experience'):
+            params['experience'] = search_params['experience']
+        if search_params.get('employment'):
+            params['employment'] = search_params['employment']
+        if search_params.get('schedule'):
+            params['schedule'] = search_params['schedule']
+        if search_params.get('salary'):
+            params['salary'] = search_params['salary']
+        
+        print(f"Запрашиваем вакансии с параметрами: {params}")
+        
         try:
             # Получаем вакансии
-            vacancies_data = HHApiService.fetch_vacancies(search_params)
+            vacancies_data = self.search_vacancies(params)
             
             if not vacancies_data.get('items'):
-                return {'success': False, 'message': 'Вакансии не найдены', 'count': 0}
+                return {
+                    'success': False,
+                    'message': 'Вакансии не найдены по данному запросу',
+                    'count': 0
+                }
+            
+            total_found = vacancies_data.get('found', 0)
+            pages = vacancies_data.get('pages', 0)
+            
+            print(f"Найдено {total_found} вакансий, {pages} страниц")
             
             saved_count = 0
             errors = []
             
             # Ограничиваем количество для обработки
-            max_vacancies = min(len(vacancies_data['items']), 50)
+            max_to_process = min(len(vacancies_data['items']), params['per_page'])
             
-            for i, vacancy_data in enumerate(vacancies_data['items'][:max_vacancies]):
+            for i, vacancy_data in enumerate(vacancies_data['items'][:max_to_process]):
                 try:
+                    vacancy_id = vacancy_data.get('id')
+                    if not vacancy_id:
+                        continue
+                    
+                    # Небольшая задержка между запросами
+                    if i > 0 and i % 5 == 0:
+                        time.sleep(0.5)
+                    
                     # Получаем детали
-                    details = HHApiService.fetch_vacancy_details(vacancy_data['id'])
+                    details = self.get_vacancy_details(vacancy_id)
                     if not details:
                         continue
                     
-                    # Обрабатываем зарплату
-                    salary = details.get('salary', {})
-                    salary_from = salary.get('from')
-                    salary_to = salary.get('to')
-                    currency = salary.get('currency', 'RUR')
+                    # Обрабатываем данные
+                    processed_data = self._process_vacancy_data(details)
                     
-                    # Обрабатываем опыт
-                    experience = details.get('experience', {}).get('name', 'Не указано')
+                    # Сохраняем в БД
+                    vacancy, created = self._save_vacancy(processed_data)
                     
-                    # Обрабатываем занятость
-                    employment = details.get('employment', {}).get('name', 'Не указано')
+                    if created:
+                        saved_count += 1
                     
-                    # Ключевые навыки
-                    key_skills_list = [skill['name'] for skill in details.get('key_skills', [])]
-                    key_skills = ', '.join(key_skills_list[:10])  # Ограничиваем 10 навыков
-                    
-                    # Описание (очищаем HTML теги)
-                    description = details.get('description', '')
-                    
-                    # Парсим дату
-                    published_at_str = details.get('published_at', '').replace('Z', '+00:00')
-                    try:
-                        published_at = make_aware(datetime.fromisoformat(published_at_str))
-                    except:
-                        published_at = make_aware(datetime.now())
-                    
-                    # Создаем или обновляем вакансию
-                    vacancy, created = Vacancy.objects.update_or_create(
-                        hh_id=details['id'],
-                        defaults={
-                            'name': details.get('name', '')[:250],
-                            'area': details.get('area', {}).get('name', 'Не указано')[:100],
-                            'salary_from': salary_from,
-                            'salary_to': salary_to,
-                            'currency': currency,
-                            'employer_name': details.get('employer', {}).get('name', '')[:250],
-                            'employer_url': details.get('employer', {}).get('alternate_url', ''),
-                            'description': description[:5000],
-                            'key_skills': key_skills,
-                            'experience': experience[:100],
-                            'employment': employment[:100],
-                            'schedule': details.get('schedule', {}).get('name', '')[:100],
-                            'alternate_url': details.get('alternate_url', ''),
-                            'published_at': published_at,
-                        }
-                    )
-                    
-                    saved_count += 1
-                    
-                    # Делаем небольшую паузу между запросами
-                    if i % 5 == 0:
-                        import time
-                        time.sleep(0.1)
+                    print(f"Обработано: {i+1}/{max_to_process} - {vacancy.name}")
                     
                 except Exception as e:
-                    errors.append(f"Вакансия {vacancy_data.get('id', 'Unknown')}: {str(e)[:50]}")
+                    error_msg = f"Ошибка при обработке вакансии {vacancy_data.get('id')}: {str(e)}"
+                    print(error_msg)
+                    errors.append(error_msg)
                     continue
             
-            # Сохраняем поисковый запрос
+            # Сохраняем запрос в историю
             if saved_count > 0:
                 SearchQuery.objects.create(
-                    query=search_params.get('text', '')[:250],
-                    area=search_params.get('area', ''),
-                    experience=search_params.get('experience', ''),
-                    employment=search_params.get('employment', ''),
+                    query=params['text'],
+                    area=params.get('area', ''),
+                    experience=params.get('experience', ''),
+                    employment=params.get('employment', ''),
                     results_count=saved_count
                 )
             
-            return {
+            result = {
                 'success': True,
                 'count': saved_count,
-                'total_found': vacancies_data.get('found', 0),
+                'total_found': total_found,
+                'pages': pages,
                 'errors': errors[:3] if errors else []
             }
             
+            print(f"Импорт завершен: {result}")
+            return result
+            
         except Exception as e:
-            return {'success': False, 'message': f'Ошибка обработки: {str(e)}', 'count': 0}
+            error_msg = f"Ошибка при импорте: {str(e)}"
+            print(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'count': 0
+            }
     
-    @staticmethod
-    def get_areas() -> List[Dict]:
+    def _process_vacancy_data(self, data: Dict) -> Dict:
+        """Обработка данных вакансии"""
+        
+        # Зарплата
+        salary = data.get('salary')
+        salary_from = salary.get('from') if salary else None
+        salary_to = salary.get('to') if salary else None
+        currency = salary.get('currency', 'RUR') if salary else None
+        salary_gross = salary.get('gross') if salary else None
+        
+        # Дата публикации
+        published_at_str = data.get('published_at', '').replace('Z', '+00:00')
+        try:
+            published_at = make_aware(datetime.fromisoformat(published_at_str))
+        except:
+            published_at = make_aware(datetime.now())
+        
+        # Навыки
+        key_skills = data.get('key_skills', [])
+        skills_text = ', '.join([skill['name'] for skill in key_skills])
+        
+        # Обработка HTML описания (упрощенная)
+        description = data.get('description', '')
+        # Можно добавить очистку HTML тегов здесь
+        
+        return {
+            'hh_id': data['id'],
+            'name': data.get('name', '')[:200],
+            'area': data.get('area', {}).get('name', 'Не указано')[:100],
+            'salary_from': salary_from,
+            'salary_to': salary_to,
+            'currency': currency,
+            'salary_gross': salary_gross,
+            'employer_name': data.get('employer', {}).get('name', '')[:200],
+            'employer_url': data.get('employer', {}).get('alternate_url', ''),
+            'description': description[:10000],
+            'key_skills': skills_text[:500],
+            'experience': data.get('experience', {}).get('name', 'Не указано')[:100],
+            'employment': data.get('employment', {}).get('name', 'Не указано')[:100],
+            'schedule': data.get('schedule', {}).get('name', 'Не указано')[:100],
+            'alternate_url': data.get('alternate_url', ''),
+            'published_at': published_at,
+        }
+    
+    def _save_vacancy(self, data: Dict):
+        """Сохранение вакансии в БД"""
+        with transaction.atomic():
+            vacancy, created = Vacancy.objects.update_or_create(
+                hh_id=data['hh_id'],
+                defaults=data
+            )
+        return vacancy, created
+    
+    def get_areas(self) -> List[Dict]:
         """Получение списка регионов"""
+        try:
+            response = self.session.get(f"{self.BASE_URL}/areas", timeout=10)
+            response.raise_for_status()
+            areas = response.json()
+            
+            # Фильтруем только Россию и популярные города
+            russia = next((area for area in areas if area['name'] == 'Россия'), None)
+            if russia:
+                popular_cities = []
+                for region in russia.get('areas', []):
+                    if region['name'] in ['Москва', 'Санкт-Петербург']:
+                        popular_cities.append({'id': region['id'], 'name': region['name']})
+                    for city in region.get('areas', []):
+                        if city['name'] in ['Екатеринбург', 'Новосибирск', 'Казань', 'Нижний Новгород']:
+                            popular_cities.append({'id': city['id'], 'name': city['name']})
+                
+                return [
+                    {'id': '113', 'name': 'Вся Россия'},
+                    *popular_cities
+                ]
+        except:
+            pass
+        
+        # Возвращаем статичный список если API не доступно
         return [
-            {'id': '113', 'name': 'Россия'},
+            {'id': '113', 'name': 'Вся Россия'},
             {'id': '1', 'name': 'Москва'},
             {'id': '2', 'name': 'Санкт-Петербург'},
             {'id': '3', 'name': 'Екатеринбург'},
             {'id': '4', 'name': 'Новосибирск'},
             {'id': '88', 'name': 'Казань'},
             {'id': '66', 'name': 'Нижний Новгород'},
-            {'id': '104', 'name': 'Челябинск'},
         ]
     
-    @staticmethod
-    def get_experiences() -> List[Dict]:
-        """Получение вариантов опыта"""
-        return [
-            {'id': '', 'name': 'Любой опыт'},
-            {'id': 'noExperience', 'name': 'Без опыта'},
-            {'id': 'between1And3', 'name': 'От 1 до 3 лет'},
-            {'id': 'between3And6', 'name': 'От 3 до 6 лет'},
-            {'id': 'moreThan6', 'name': 'Более 6 лет'},
-        ]
+    def quick_search(self, query: str, limit: int = 10) -> List[Dict]:
+        """Быстрый поиск вакансий (для автодополнения)"""
+        params = {
+            'text': query,
+            'per_page': limit,
+            'order_by': 'relevance'
+        }
+        
+        try:
+            data = self.search_vacancies(params)
+            results = []
+            
+            for item in data.get('items', [])[:limit]:
+                salary = item.get('salary', {})
+                results.append({
+                    'id': item['id'],
+                    'name': item.get('name', ''),
+                    'employer': item.get('employer', {}).get('name', ''),
+                    'area': item.get('area', {}).get('name', ''),
+                    'salary_from': salary.get('from'),
+                    'salary_to': salary.get('to'),
+                    'currency': salary.get('currency'),
+                    'alternate_url': item.get('alternate_url', ''),
+                })
+            
+            return results
+        except:
+            return []
     
-    @staticmethod
-    def get_employments() -> List[Dict]:
-        """Получение типов занятости"""
-        return [
-            {'id': '', 'name': 'Любая занятость'},
-            {'id': 'full', 'name': 'Полная занятость'},
-            {'id': 'part', 'name': 'Частичная занятость'},
-            {'id': 'project', 'name': 'Проектная работа'},
-            {'id': 'volunteer', 'name': 'Волонтерство'},
-            {'id': 'probation', 'name': 'Стажировка'},
-        ]
-    
-    @staticmethod
-    def search_vacancies_api(params: Dict) -> Dict:
-        """Поиск вакансий через API"""
-        return HHApiService.fetch_vacancies(params)
-    
-    @staticmethod
-    def get_popular_skills_from_db(limit: int = 10) -> List[Dict]:
-        """Получение популярных навыков из базы"""
-        from collections import Counter
-        
-        all_skills = []
-        vacancies = Vacancy.objects.exclude(key_skills='').only('key_skills')
-        
-        for vacancy in vacancies:
-            skills = [s.strip() for s in vacancy.key_skills.split(',') if s.strip()]
-            all_skills.extend(skills)
-        
-        skill_counter = Counter(all_skills)
-        result = []
-        
-        for skill, count in skill_counter.most_common(limit):
-            result.append({
-                'name': skill,
-                'count': count,
-                'percentage': round(count / len(vacancies) * 100, 1) if vacancies else 0
-            })
-        
-        return result
+    def test_connection(self) -> bool:
+        """Тестирование подключения к API"""
+        try:
+            response = self.session.get(f"{self.BASE_URL}/vacancies", params={'per_page': 1}, timeout=5)
+            return response.status_code == 200
+        except:
+            return False

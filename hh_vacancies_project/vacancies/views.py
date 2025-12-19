@@ -5,8 +5,8 @@ from django.db.models import Q, Count, Avg, Max, Min
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db import transaction
-import json
 from datetime import datetime, timedelta
+import json
 
 from .models import Vacancy, SearchQuery
 from .forms import SearchForm, ImportForm
@@ -14,83 +14,63 @@ from .services import HHApiService
 
 
 class HomeView(TemplateView):
-    """Главная страница с реальными данными"""
+    """Главная страница"""
     template_name = 'vacancies/home.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['title'] = 'HH Вакансии - Поиск работы'
         
         # Статистика для главной страницы
         context['total_vacancies'] = Vacancy.objects.count()
+        
+        # Количество уникальных работодателей
         context['total_employers'] = Vacancy.objects.values('employer_name').distinct().count()
         
-        # Последние вакансии
-        context['recent_vacancies'] = Vacancy.objects.all().order_by('-published_at')[:6]
-        
-        # Популярные навыки
-        context['popular_skills'] = self.get_popular_skills(limit=8)
-        
-        # Средняя зарплата
-        avg_salary = Vacancy.objects.filter(
+        # Средние зарплаты
+        salary_stats = Vacancy.objects.filter(
             Q(salary_from__isnull=False) | Q(salary_to__isnull=False)
         ).aggregate(
             avg_from=Avg('salary_from'),
             avg_to=Avg('salary_to')
         )
-        context['avg_salary_from'] = int(avg_salary['avg_from'] or 0)
-        context['avg_salary_to'] = int(avg_salary['avg_to'] or 0)
+        context['avg_salary_from'] = int(salary_stats['avg_from'] or 0)
+        context['avg_salary_to'] = int(salary_stats['avg_to'] or 0)
         
-        context['search_form'] = SearchForm()
-        context['import_form'] = ImportForm()
+        # Последние 6 вакансий
+        context['recent_vacancies'] = Vacancy.objects.all().order_by('-published_at')[:6]
         
         return context
-    
-    def get_popular_skills(self, limit=10):
-        """Получение популярных навыков"""
-        from collections import Counter
-        all_skills = []
-        
-        vacancies = Vacancy.objects.exclude(key_skills='')
-        for vacancy in vacancies:
-            skills = [s.strip() for s in vacancy.key_skills.split(',') if s.strip()]
-            all_skills.extend(skills)
-        
-        skill_counter = Counter(all_skills)
-        return skill_counter.most_common(limit)
 
 
 class VacancyListView(ListView):
-    """Список вакансий с реальными данными и фильтрацией"""
+    """Список всех вакансий с поиском и фильтрацией"""
     model = Vacancy
     template_name = 'vacancies/vacancy_list.html'
     context_object_name = 'vacancies'
-    paginate_by = 15
+    paginate_by = 12
     
     def get_queryset(self):
         queryset = Vacancy.objects.all()
         
-        # Поиск по тексту
-        search_text = self.request.GET.get('q', '').strip()
-        if search_text:
+        # Поиск по ключевым словам
+        search_query = self.request.GET.get('q', '').strip()
+        if search_query:
             queryset = queryset.filter(
-                Q(name__icontains=search_text) |
-                Q(description__icontains=search_text) |
-                Q(key_skills__icontains=search_text) |
-                Q(employer_name__icontains=search_text)
+                Q(name__icontains=search_query) |
+                Q(description__icontains=search_query) |
+                Q(key_skills__icontains=search_query) |
+                Q(employer_name__icontains=search_query)
             )
         
-        # Фильтр по региону
+        # Фильтры
         area = self.request.GET.get('area')
         if area:
             queryset = queryset.filter(area__icontains=area)
         
-        # Фильтр по опыту
         experience = self.request.GET.get('experience')
         if experience:
             queryset = queryset.filter(experience__icontains=experience)
         
-        # Фильтр по занятости
         employment = self.request.GET.get('employment')
         if employment:
             queryset = queryset.filter(employment__icontains=employment)
@@ -112,110 +92,132 @@ class VacancyListView(ListView):
         
         # Сортировка
         sort_by = self.request.GET.get('sort', '-published_at')
-        if sort_by in ['-published_at', 'published_at', 'salary_from', '-salary_from']:
+        if sort_by in ['-published_at', 'published_at', '-salary_from', 'salary_from', '-salary_to', 'salary_to']:
             queryset = queryset.order_by(sort_by)
         
         return queryset
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        
+        # Форма поиска с текущими параметрами
         context['search_form'] = SearchForm(self.request.GET or None)
         
-        # Статистика для страницы
+        # Общее количество отфильтрованных вакансий
         context['total_count'] = self.get_queryset().count()
-        context['areas'] = Vacancy.objects.values_list('area', flat=True).distinct()[:10]
-        context['experiences'] = Vacancy.objects.values_list('experience', flat=True).distinct()
-        
-        # Сохраняем параметры поиска
-        context['search_params'] = self.request.GET.copy()
-        if 'page' in context['search_params']:
-            del context['search_params']['page']
         
         return context
 
 
 class VacancyDetailView(DetailView):
-    """Детальная страница вакансии"""
+    """Детальная информация о вакансии"""
     model = Vacancy
     template_name = 'vacancies/vacancy_detail.html'
     context_object_name = 'vacancy'
     
     def get_object(self, queryset=None):
-        # Ищем по hh_id или по id
+        # Получаем вакансию по hh_id из URL
         hh_id = self.kwargs.get('hh_id')
-        if hh_id:
-            return get_object_or_404(Vacancy, hh_id=hh_id)
-        return get_object_or_404(Vacancy, pk=self.kwargs.get('pk'))
+        return get_object_or_404(Vacancy, hh_id=hh_id)
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Похожие вакансии
+        # Похожие вакансии (по тому же работодателю или похожему названию)
         vacancy = self.object
+        
+        # Разбиваем ключевые навыки
+        if vacancy.key_skills:
+            context['key_skills'] = [skill.strip() for skill in vacancy.key_skills.split(',') if skill.strip()]
+        else:
+            context['key_skills'] = []
+        
+        # Похожие вакансии
         similar_vacancies = Vacancy.objects.filter(
-            Q(name__icontains=vacancy.name.split()[0]) |
-            Q(employer_name=vacancy.employer_name)
-        ).exclude(id=vacancy.id)[:4]
+            Q(employer_name=vacancy.employer_name) |
+            Q(name__icontains=vacancy.name.split()[0])
+        ).exclude(id=vacancy.id)[:3]
         
         context['similar_vacancies'] = similar_vacancies
-        context['skills_list'] = [s.strip() for s in vacancy.key_skills.split(',') if s.strip()]
-        
-        # Форматирование описания
-        if vacancy.description:
-            # Простая очистка HTML тегов
-            import re
-            clean_text = re.sub('<[^<]+?>', '', vacancy.description)
-            context['clean_description'] = clean_text[:2000] + '...' if len(clean_text) > 2000 else clean_text
         
         return context
 
 
 class SearchView(TemplateView):
-    """Страница поиска вакансий"""
+    """Страница расширенного поиска"""
     template_name = 'vacancies/search.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['search_form'] = SearchForm(self.request.GET or None)
         
-        # Получаем популярные фильтры
-        api_service = HHApiService()
-        context['areas'] = api_service.get_areas()
-        context['experiences'] = api_service.get_experiences()
-        context['employments'] = api_service.get_employments()
-        
-        # Если есть поисковый запрос, сразу показываем результаты
+        # Если есть параметры поиска, перенаправляем на список вакансий
         if self.request.GET.get('q'):
-            return redirect('vacancy_list?' + self.request.GET.urlencode())
+            return self.redirect_to_vacancy_list()
+        
+        # Инициализируем сервис API
+        api_service = HHApiService()
+        
+        # Получаем данные для формы
+        context['areas'] = api_service.get_areas()
+        context['api_available'] = api_service.test_connection()
+        
+        # Форма поиска с текущими параметрами
+        context['search_form'] = SearchForm(self.request.GET or None)
         
         return context
     
+    def redirect_to_vacancy_list(self):
+        """Перенаправление на страницу списка вакансий с параметрами поиска"""
+        params = self.request.GET.copy()
+        if 'page' in params:
+            del params['page']
+        
+        redirect_url = f"/vacancies/?{params.urlencode()}"
+        return redirect(redirect_url)
+    
     def post(self, request, *args, **kwargs):
+        """Обработка формы поиска (POST запрос)"""
         form = SearchForm(request.POST)
+        
         if form.is_valid():
-            # Сохраняем поисковый запрос
+            # Сохраняем поисковый запрос в историю
             search_data = form.cleaned_data
+            
             SearchQuery.objects.create(
                 query=search_data.get('query', ''),
                 area=search_data.get('area', ''),
                 experience=search_data.get('experience', ''),
                 employment=search_data.get('employment', ''),
-                results_count=0
+                results_count=0  # Будет обновлено после поиска
             )
             
             # Формируем URL для редиректа
-            params = []
-            for key, value in search_data.items():
-                if value:
-                    params.append(f"{key}={value}")
+            params = {}
+            if search_data.get('query'):
+                params['q'] = search_data['query']
+            if search_data.get('area'):
+                params['area'] = search_data['area']
+            if search_data.get('experience'):
+                params['experience'] = search_data['experience']
+            if search_data.get('employment'):
+                params['employment'] = search_data['employment']
+            if search_data.get('salary_from'):
+                params['salary_from'] = search_data['salary_from']
+            if search_data.get('salary_to'):
+                params['salary_to'] = search_data['salary_to']
+            if search_data.get('sort_by'):
+                params['sort'] = search_data['sort_by']
             
             redirect_url = f"/vacancies/"
             if params:
-                redirect_url += f"?{'&'.join(params)}"
+                redirect_url += f"?{ '&'.join([f'{k}={v}' for k, v in params.items() if v]) }"
             
             return redirect(redirect_url)
         
-        return self.render_to_response({'search_form': form})
+        # Если форма не валидна, показываем ошибки
+        context = self.get_context_data()
+        context['search_form'] = form
+        return self.render_to_response(context)
 
 
 class ImportVacanciesView(TemplateView):
@@ -224,8 +226,20 @@ class ImportVacanciesView(TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        
+        # Инициализируем сервис API
+        api_service = HHApiService()
+        
+        # Получаем данные для формы
+        context['areas'] = api_service.get_areas()
+        context['api_available'] = api_service.test_connection()
+        
+        # Форма импорта
         context['import_form'] = ImportForm()
+        
+        # История импортов (последние 10)
         context['recent_imports'] = SearchQuery.objects.all().order_by('-search_date')[:10]
+        
         return context
     
     def post(self, request, *args, **kwargs):
@@ -233,27 +247,42 @@ class ImportVacanciesView(TemplateView):
         
         if form.is_valid():
             search_query = form.cleaned_data['search_query']
-            count = min(form.cleaned_data['count'], 100)  # Ограничиваем 100
+            count = min(form.cleaned_data['count'], 50)  # Ограничиваем 50
+            area = form.cleaned_data.get('area', '113')
             
-            # Подготавливаем параметры поиска
+            # Подготавливаем параметры для API
             search_params = {
                 'text': search_query,
-                'per_page': min(count, 50),
-                'area': '113',  # Вся Россия
+                'per_page': count,
+                'area': area,
                 'order_by': 'relevance'
             }
             
+            # Добавляем дополнительные фильтры из формы
+            experience = request.POST.get('experience')
+            if experience:
+                search_params['experience'] = experience
+            
             # Импортируем вакансии
             api_service = HHApiService()
-            result = api_service.process_and_save_vacancies(search_params)
+            
+            # Проверяем доступность API
+            if not api_service.test_connection():
+                messages.error(request, "❌ HH API недоступно. Проверьте подключение к интернету.")
+                return self.render_to_response(self.get_context_data())
+            
+            # Показываем сообщение о начале импорта
+            messages.info(request, f"⏳ Начинаем импорт вакансий по запросу: '{search_query}'...")
+            
+            # Запускаем импорт
+            result = api_service.import_vacancies(search_params)
             
             if result['success']:
                 messages.success(
                     request,
-                    f"✅ Успешно импортировано {result['count']} вакансий по запросу '{search_query}'"
+                    f"✅ Успешно импортировано {result['count']} вакансий"
                 )
                 
-                # Показываем предупреждения, если есть
                 if result.get('errors'):
                     for error in result['errors'][:3]:  # Показываем только 3 ошибки
                         messages.warning(request, f"⚠️ {error}")
@@ -263,7 +292,10 @@ class ImportVacanciesView(TemplateView):
             
             return redirect('import_vacancies')
         
-        return self.render_to_response({'import_form': form})
+        # Если форма не валидна
+        context = self.get_context_data()
+        context['import_form'] = form
+        return self.render_to_response(context)
 
 
 class StatisticsView(TemplateView):
@@ -274,8 +306,8 @@ class StatisticsView(TemplateView):
         context = super().get_context_data(**kwargs)
         
         # Основная статистика
-        total_vacancies = Vacancy.objects.count()
-        total_employers = Vacancy.objects.values('employer_name').distinct().count()
+        context['total_vacancies'] = Vacancy.objects.count()
+        context['total_employers'] = Vacancy.objects.values('employer_name').distinct().count()
         
         # Статистика по зарплате
         salary_stats = Vacancy.objects.aggregate(
@@ -284,116 +316,57 @@ class StatisticsView(TemplateView):
             max_salary=Max('salary_to'),
             min_salary=Min('salary_from')
         )
+        context['salary_stats'] = salary_stats
         
         # Статистика по опыту
         experience_stats = Vacancy.objects.values('experience').annotate(
             count=Count('id')
         ).order_by('-count')
+        context['experience_stats'] = experience_stats
         
         # Статистика по регионам
         area_stats = Vacancy.objects.values('area').annotate(
             count=Count('id')
         ).order_by('-count')[:10]
+        context['area_stats'] = area_stats
         
         # Топ работодателей
         top_employers = Vacancy.objects.values('employer_name').annotate(
             count=Count('id')
         ).order_by('-count')[:10]
+        context['top_employers'] = top_employers
         
         # Популярные навыки
         all_skills = []
         vacancies = Vacancy.objects.exclude(key_skills='')
         for vacancy in vacancies:
-            skills = [s.strip() for s in vacancy.key_skills.split(',') if s.strip()]
-            all_skills.extend(skills)
+            if vacancy.key_skills:
+                skills = [s.strip() for s in vacancy.key_skills.split(',') if s.strip()]
+                all_skills.extend(skills)
         
         from collections import Counter
-        popular_skills = Counter(all_skills).most_common(15)
-        
-        # Вакансии по дням (последние 30 дней)
-        thirty_days_ago = datetime.now() - timedelta(days=30)
-        vacancies_by_day = []
-        for i in range(30):
-            day = thirty_days_ago + timedelta(days=i)
-            count = Vacancy.objects.filter(
-                published_at__date=day.date()
-            ).count()
-            vacancies_by_day.append({
-                'date': day.strftime('%d.%m'),
-                'count': count
-            })
-        
-        context.update({
-            'total_vacancies': total_vacancies,
-            'total_employers': total_employers,
-            'salary_stats': salary_stats,
-            'experience_stats': experience_stats,
-            'area_stats': area_stats,
-            'top_employers': top_employers,
-            'popular_skills': popular_skills,
-            'vacancies_by_day': vacancies_by_day,
-        })
+        skill_counter = Counter(all_skills)
+        popular_skills = skill_counter.most_common(15)
+        context['popular_skills'] = popular_skills
         
         return context
 
 
-class CompareVacanciesView(TemplateView):
-    """Сравнение вакансий"""
-    template_name = 'vacancies/compare.html'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Получаем ID вакансий для сравнения
-        vacancy_ids = self.request.GET.getlist('vacancy_id')
-        vacancies = Vacancy.objects.filter(id__in=vacancy_ids[:4])  # Ограничиваем 4
-        
-        context['vacancies'] = vacancies
-        return context
-
-
-class EmployerDetailView(DetailView):
-    """Страница работодателя"""
-    template_name = 'vacancies/employer_detail.html'
-    context_object_name = 'employer'
-    
-    def get_object(self, queryset=None):
-        employer_name = self.kwargs.get('employer_name')
-        vacancies = Vacancy.objects.filter(employer_name=employer_name)
-        if not vacancies.exists():
-            return None
-        
-        # Собираем статистику по работодателю
-        employer_stats = {
-            'name': employer_name,
-            'vacancy_count': vacancies.count(),
-            'avg_salary_from': int(vacancies.aggregate(avg=Avg('salary_from'))['avg'] or 0),
-            'avg_salary_to': int(vacancies.aggregate(avg=Avg('salary_to'))['avg'] or 0),
-            'areas': vacancies.values_list('area', flat=True).distinct(),
-            'vacancies': vacancies.order_by('-published_at')[:10]
-        }
-        
-        return employer_stats
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        if not self.object:
-            context['error'] = 'Работодатель не найден'
-        return context
-
-
-# API views
+# API Views для AJAX запросов
 def api_vacancy_search(request):
     """API для быстрого поиска вакансий (AJAX)"""
     if request.method == 'GET':
         query = request.GET.get('q', '').strip()
+        limit = int(request.GET.get('limit', 10))
+        
         if len(query) < 2:
             return JsonResponse({'items': [], 'count': 0})
         
         vacancies = Vacancy.objects.filter(
             Q(name__icontains=query) |
-            Q(employer_name__icontains=query)
-        ).order_by('-published_at')[:10]
+            Q(employer_name__icontains=query) |
+            Q(key_skills__icontains=query)
+        ).order_by('-published_at')[:limit]
         
         results = []
         for vacancy in vacancies:
@@ -403,13 +376,18 @@ def api_vacancy_search(request):
                 'name': vacancy.name,
                 'employer': vacancy.employer_name,
                 'area': vacancy.area,
-                'salary': vacancy.get_salary_display(),
-                'url': f"/vacancies/{vacancy.hh_id}/"
+                'salary': f"{vacancy.salary_from or ''}-{vacancy.salary_to or ''} {vacancy.currency or '₽'}",
+                'url': f"/vacancies/{vacancy.hh_id}/",
+                'published_at': vacancy.published_at.strftime('%d.%m.%Y')
             })
         
-        return JsonResponse({'items': results, 'count': len(results)})
+        return JsonResponse({
+            'items': results,
+            'count': len(results),
+            'query': query
+        })
     
-    return JsonResponse({'error': 'Invalid request'}, status=400)
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
 
 
 def api_get_statistics(request):
@@ -420,7 +398,9 @@ def api_get_statistics(request):
         'avg_salary': int(Vacancy.objects.filter(
             salary_from__isnull=False
         ).aggregate(avg=Avg('salary_from'))['avg'] or 0),
-        'recent_vacancies': Vacancy.objects.count()
+        'recent_imports': SearchQuery.objects.count(),
+        'last_import': SearchQuery.objects.order_by('-search_date').first().search_date.strftime('%d.%m.%Y %H:%M') 
+            if SearchQuery.objects.exists() else 'Нет данных'
     }
     return JsonResponse(stats)
 
@@ -430,7 +410,37 @@ def clear_database(request):
     if request.method == 'POST' and request.user.is_superuser:
         Vacancy.objects.all().delete()
         SearchQuery.objects.all().delete()
-        messages.success(request, "База данных очищена")
+        messages.success(request, "✅ База данных успешно очищена")
         return redirect('home')
     
-    return render(request, 'vacancies/clear_db.html')
+    return redirect('home')
+
+
+def test_api_view(request):
+    """Тестирование подключения к HH API"""
+    api_service = HHApiService()
+    is_available = api_service.test_connection()
+    
+    if request.method == 'POST':
+        query = request.POST.get('query', 'Python')
+        params = {
+            'text': query,
+            'per_page': 5,
+            'area': '113'
+        }
+        
+        result = api_service.search_vacancies(params)
+        
+        if result.get('items'):
+            messages.success(request, f"✅ API работает! Найдено {result.get('found', 0)} вакансий по запросу '{query}'")
+        else:
+            messages.warning(request, "⚠️ API вернуло пустой результат")
+        
+        return redirect('test_api')
+    
+    context = {
+        'api_available': is_available,
+        'test_result': None
+    }
+    
+    return render(request, 'vacancies/test_api.html', context)

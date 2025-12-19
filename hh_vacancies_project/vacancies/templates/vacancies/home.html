@@ -1,55 +1,91 @@
 {% extends 'vacancies/base.html' %}
 
-{% block page_title %}Добро пожаловать в HH Вакансии{% endblock %}
+{% block title %}Главная - HH Вакансии{% endblock %}
+
+{% block page_title %}Найдите работу мечты{% endblock %}
+
+{% block page_subtitle %}
+<p class="lead">Поиск и анализ вакансий с HeadHunter API</p>
+{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active">Главная</li>
+{% endblock %}
 
 {% block content %}
 <div class="row">
+    <!-- Левая колонка -->
     <div class="col-lg-8">
-        <!-- Приветствие -->
-        <div class="card shadow-sm mb-4">
+        <!-- Быстрый поиск -->
+        <div class="card card-modern mb-4">
+            <div class="card-header card-header-modern">
+                <h5 class="mb-0"><i class="bi bi-search"></i> Быстрый поиск вакансий</h5>
+            </div>
             <div class="card-body">
-                <h1 class="display-6 mb-4">Найдите свою идеальную работу</h1>
-                <p class="lead">Поиск вакансий с HeadHunter API в реальном времени.</p>
+                <form method="get" action="{% url 'vacancy_list' %}" class="row g-3">
+                    <div class="col-md-8">
+                        <input type="text" name="q" class="form-control form-control-custom" 
+                               placeholder="Python разработчик, менеджер проектов, дизайнер...">
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-custom-primary w-100">
+                            <i class="bi bi-search"></i> Найти
+                        </button>
+                    </div>
+                </form>
                 
-                <!-- Быстрый поиск -->
-                <div class="search-box p-4 bg-light rounded mb-4">
-                    <h5 class="mb-3"><i class="fas fa-search me-2"></i>Начните поиск</h5>
-                    <form method="get" action="{% url 'vacancy_list' %}" class="row g-3">
-                        <div class="col-md-8">
-                            <input type="text" name="q" class="form-control form-control-lg" 
-                                   placeholder="Python разработчик, менеджер, дизайнер...">
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <p class="text-muted mb-2">Популярные запросы:</p>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for query in ['Python', 'JavaScript', 'Java', 'C#', 'PHP', 'Go', 'Data Science', 'DevOps'] %}
+                            <a href="{% url 'vacancy_list' %}?q={{ query }}" 
+                               class="badge bg-light text-dark text-decoration-none hover-lift">
+                                {{ query }}
+                            </a>
+                            {% endfor %}
                         </div>
-                        <div class="col-md-4">
-                            <button type="submit" class="btn btn-primary btn-lg w-100">
-                                <i class="fas fa-search me-2"></i>Найти
-                            </button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Последние вакансии -->
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Последние вакансии</h5>
+        {% if recent_vacancies %}
+        <div class="card card-modern mb-4">
+            <div class="card-header card-header-modern">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние вакансии</h5>
             </div>
             <div class="card-body">
-                {% if recent_vacancies %}
                 <div class="row">
-                    {% for vacancy in recent_vacancies %}
+                    {% for vacancy in recent_vacancies|slice:":6" %}
                     <div class="col-md-6 mb-3">
-                        <div class="card h-100 border">
+                        <div class="card vacancy-card h-100">
                             <div class="card-body">
-                                <h6 class="card-title">{{ vacancy.name }}</h6>
+                                <h6 class="card-title">{{ vacancy.name|truncatechars:50 }}</h6>
                                 <p class="card-text text-muted small mb-2">
-                                    <i class="fas fa-building me-1"></i>{{ vacancy.employer_name }}
+                                    <i class="bi bi-building"></i> {{ vacancy.employer_name|truncatechars:30 }}
                                 </p>
-                                <p class="card-text small">
-                                    <i class="fas fa-map-marker-alt me-1"></i>{{ vacancy.area }}
-                                    <br>
-                                    <i class="fas fa-money-bill-wave me-1"></i>{{ vacancy.get_salary_display }}
-                                </p>
+                                
+                                {% if vacancy.salary_from or vacancy.salary_to %}
+                                <div class="mb-2">
+                                    <span class="salary-badge">
+                                        {% if vacancy.salary_from and vacancy.salary_to %}
+                                            {{ vacancy.salary_from|floatformat:0 }} - {{ vacancy.salary_to|floatformat:0 }} ₽
+                                        {% elif vacancy.salary_from %}
+                                            от {{ vacancy.salary_from|floatformat:0 }} ₽
+                                        {% elif vacancy.salary_to %}
+                                            до {{ vacancy.salary_to|floatformat:0 }} ₽
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="small text-muted mb-3">
+                                    <div><i class="bi bi-geo-alt"></i> {{ vacancy.area|default:"Не указано" }}</div>
+                                    <div><i class="bi bi-calendar"></i> {{ vacancy.published_at|date:"d.m.Y" }}</div>
+                                </div>
+                                
                                 <a href="{% url 'vacancy_detail' vacancy.hh_id %}" 
                                    class="btn btn-outline-primary btn-sm">
                                     Подробнее
@@ -59,125 +95,107 @@
                     </div>
                     {% endfor %}
                 </div>
+                
                 <div class="text-center mt-3">
-                    <a href="{% url 'vacancy_list' %}" class="btn btn-primary">
-                        <i class="fas fa-list me-2"></i>Все вакансии
+                    <a href="{% url 'vacancy_list' %}" class="btn btn-custom-primary">
+                        <i class="bi bi-list-ul"></i> Все вакансии
                     </a>
                 </div>
-                {% else %}
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Вакансии еще не загружены. 
-                    <a href="{% url 'import_vacancies' %}" class="alert-link">
-                        Импортируйте первые вакансии
-                    </a>
-                </div>
-                {% endif %}
             </div>
         </div>
-
-        <!-- Популярные навыки -->
-        {% if popular_skills %}
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="fas fa-star me-2"></i>Популярные навыки</h5>
-            </div>
-            <div class="card-body">
-                <div class="d-flex flex-wrap gap-2">
-                    {% for skill, count in popular_skills %}
-                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 p-2">
-                        {{ skill }} <span class="badge bg-primary rounded-pill ms-1">{{ count }}</span>
-                    </span>
-                    {% endfor %}
-                </div>
+        {% else %}
+        <div class="card card-modern">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-cloud-upload display-1 text-muted mb-3"></i>
+                <h4>База вакансий пуста</h4>
+                <p class="text-muted">Импортируйте первые вакансии для начала работы</p>
+                <a href="{% url 'import_vacancies' %}" class="btn btn-custom-primary">
+                    <i class="bi bi-cloud-download"></i> Импортировать вакансии
+                </a>
             </div>
         </div>
         {% endif %}
     </div>
 
+    <!-- Правая колонка -->
     <div class="col-lg-4">
         <!-- Статистика -->
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Статистика</h5>
+        <div class="card card-modern mb-4">
+            <div class="card-header card-header-modern">
+                <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Статистика</h5>
             </div>
             <div class="card-body">
                 <div class="row text-center">
                     <div class="col-6 mb-3">
-                        <div class="stat-number text-primary">{{ total_vacancies }}</div>
-                        <div class="stat-label text-muted small">Вакансий</div>
+                        <div class="display-6 fw-bold text-primary">{{ total_vacancies|default:0 }}</div>
+                        <div class="text-muted small">Вакансий</div>
                     </div>
                     <div class="col-6 mb-3">
-                        <div class="stat-number text-success">{{ total_employers }}</div>
-                        <div class="stat-label text-muted small">Работодателей</div>
+                        <div class="display-6 fw-bold text-success">{{ total_employers|default:0 }}</div>
+                        <div class="text-muted small">Работодателей</div>
                     </div>
                     <div class="col-6">
-                        <div class="stat-number text-warning">{{ avg_salary_from|floatformat:0 }}₽</div>
-                        <div class="stat-label text-muted small">Средняя з/п</div>
+                        <div class="display-6 fw-bold text-warning">{{ avg_salary_from|default:0|floatformat:0 }}₽</div>
+                        <div class="text-muted small">Средняя з/п</div>
                     </div>
                     <div class="col-6">
-                        <div class="stat-number text-info">{{ avg_salary_to|floatformat:0 }}₽</div>
-                        <div class="stat-label text-muted small">До</div>
+                        <div class="display-6 fw-bold text-info">{{ avg_salary_to|default:0|floatformat:0 }}₽</div>
+                        <div class="text-muted small">Максимум</div>
                     </div>
                 </div>
+                
                 <div class="text-center mt-3">
-                    <a href="{% url 'statistics' %}" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-chart-line me-2"></i>Подробная статистика
+                    <a href="{% url 'statistics' %}" class="btn btn-outline-primary btn-sm w-100">
+                        <i class="bi bi-graph-up"></i> Подробная статистика
                     </a>
                 </div>
             </div>
         </div>
 
-        <!-- Импорт вакансий -->
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="fas fa-download me-2"></i>Импорт вакансий</h5>
+        <!-- Быстрый импорт -->
+        <div class="card card-modern mb-4">
+            <div class="card-header card-header-modern">
+                <h5 class="mb-0"><i class="bi bi-cloud-download"></i> Быстрый импорт</h5>
             </div>
             <div class="card-body">
                 <form method="post" action="{% url 'import_vacancies' %}">
                     {% csrf_token %}
                     <div class="mb-3">
-                        <label class="form-label">Поисковый запрос</label>
-                        <input type="text" name="search_query" class="form-control" 
-                               placeholder="Python разработчик..." required>
+                        <label class="form-label">Ключевые слова</label>
+                        <input type="text" name="search_query" class="form-control form-control-custom" 
+                               placeholder="Python, JavaScript, Java..." required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Количество</label>
-                        <input type="number" name="count" class="form-control" 
-                               value="30" min="1" max="100">
+                        <input type="number" name="count" class="form-control form-control-custom" 
+                               value="20" min="1" max="50">
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-cloud-download-alt me-2"></i>Импортировать
+                    <button type="submit" class="btn btn-custom-primary w-100">
+                        <i class="bi bi-download"></i> Импортировать
                     </button>
                 </form>
-                <div class="mt-3 small text-muted">
-                    <i class="fas fa-info-circle me-1"></i>
-                    Данные загружаются с HH.ru в реальном времени
-                </div>
             </div>
         </div>
 
         <!-- Быстрые ссылки -->
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Быстрые действия</h5>
+        <div class="card card-modern">
+            <div class="card-header card-header-modern">
+                <h5 class="mb-0"><i class="bi bi-lightning"></i> Быстрые действия</h5>
             </div>
             <div class="card-body">
                 <div class="list-group list-group-flush">
-                    <a href="{% url 'search' %}" class="list-group-item list-group-item-action">
-                        <i class="fas fa-search me-2"></i>Расширенный поиск
+                    <a href="{% url 'search' %}" class="list-group-item list-group-item-action border-0 py-3">
+                        <i class="bi bi-search me-2"></i> Расширенный поиск
                     </a>
-                    <a href="{% url 'import_vacancies' %}" class="list-group-item list-group-item-action">
-                        <i class="fas fa-database me-2"></i>Загрузить вакансии
+                    <a href="{% url 'vacancy_list' %}" class="list-group-item list-group-item-action border-0 py-3">
+                        <i class="bi bi-filter me-2"></i> Все вакансии с фильтрами
                     </a>
-                    <a href="{% url 'statistics' %}" class="list-group-item list-group-item-action">
-                        <i class="fas fa-chart-pie me-2"></i>Аналитика
+                    <a href="{% url 'import_vacancies' %}" class="list-group-item list-group-item-action border-0 py-3">
+                        <i class="bi bi-database me-2"></i> Загрузить новые данные
                     </a>
-                    {% if user.is_superuser %}
-                    <a href="/admin/" class="list-group-item list-group-item-action">
-                        <i class="fas fa-cog me-2"></i>Админ-панель
+                    <a href="{% url 'statistics' %}" class="list-group-item list-group-item-action border-0 py-3">
+                        <i class="bi bi-pie-chart me-2"></i> Аналитика рынка
                     </a>
-                    {% endif %}
                 </div>
             </div>
         </div>

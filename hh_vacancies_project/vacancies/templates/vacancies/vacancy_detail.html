@@ -1,6 +1,200 @@
 {% extends 'vacancies/base.html' %}
 
+{% block title %}{{ vacancy.name }} - HH Вакансии{% endblock %}
+
+{% block page_title %}{{ vacancy.name }}{% endblock %}
+
+{% block page_subtitle %}
+<p class="text-muted mb-0">
+    <i class="bi bi-building"></i> {{ vacancy.employer_name }}
+</p>
+{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{% url 'vacancy_list' %}">Вакансии</a></li>
+<li class="breadcrumb-item active">{{ vacancy.name|truncatechars:30 }}</li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="d-flex gap-2">
+    <a href="{{ vacancy.alternate_url }}" target="_blank" class="btn btn-outline-primary">
+        <i class="bi bi-box-arrow-up-right"></i> На HH
+    </a>
+    <a href="{% url 'vacancy_list' %}" class="btn btn-custom-primary">
+        <i class="bi bi-arrow-left"></i> Назад к списку
+    </a>
+</div>
+{% endblock %}
+
 {% block content %}
-<h2>Детали вакансии</h2>
-<p>Здесь будет детальная информация о вакансии</p>
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Основная информация -->
+        <div class="card card-modern mb-4">
+            <div class="card-header card-header-modern">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Информация о вакансии</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-building"></i> Работодатель</h6>
+                        <p class="mb-3">{{ vacancy.employer_name }}</p>
+                        
+                        {% if vacancy.employer_url %}
+                        <a href="{{ vacancy.employer_url }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-link"></i> Сайт компании
+                        </a>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        {% if vacancy.salary_from or vacancy.salary_to %}
+                        <h6><i class="bi bi-cash-stack"></i> Зарплата</h6>
+                        <div class="salary-badge">
+                            {% if vacancy.salary_from and vacancy.salary_to %}
+                                {{ vacancy.salary_from|floatformat:0 }} - {{ vacancy.salary_to|floatformat:0 }} ₽
+                            {% elif vacancy.salary_from %}
+                                от {{ vacancy.salary_from|floatformat:0 }} ₽
+                            {% elif vacancy.salary_to %}
+                                до {{ vacancy.salary_to|floatformat:0 }} ₽
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Детали -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6><i class="bi bi-geo-alt"></i> Регион</h6>
+                                <p>{{ vacancy.area|default:"Не указано" }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6><i class="bi bi-briefcase"></i> Опыт</h6>
+                                <p>{{ vacancy.experience|default:"Не указано" }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6><i class="bi bi-clock"></i> Занятость</h6>
+                                <p>{{ vacancy.employment|default:"Не указано" }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6><i class="bi bi-calendar"></i> Опубликовано</h6>
+                                <p>{{ vacancy.published_at|date:"d.m.Y" }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Описание -->
+                {% if vacancy.description %}
+                <div class="mb-4">
+                    <h6><i class="bi bi-file-text"></i> Описание</h6>
+                    <div class="border rounded p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
+                        {{ vacancy.description|safe }}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Навыки -->
+                {% if vacancy.key_skills %}
+                <div class="mb-4">
+                    <h6><i class="bi bi-tools"></i> Ключевые навыки</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for skill in vacancy.key_skills %}
+                        <span class="badge bg-primary">{{ skill }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Быстрые действия -->
+        <div class="card card-modern mb-4">
+            <div class="card-header card-header-modern">
+                <h5 class="mb-0"><i class="bi bi-lightning"></i> Быстрые действия</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'search' %}?q={{ vacancy.name|urlencode }}" 
+                       class="btn btn-outline-primary">
+                        <i class="bi bi-search"></i> Похожие вакансии
+                    </a>
+                    <a href="{% url 'search' %}?q={{ vacancy.employer_name|urlencode }}" 
+                       class="btn btn-outline-primary">
+                        <i class="bi bi-building"></i> Вакансии компании
+                    </a>
+                    <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ vacancy.name }} - {{ vacancy.employer_name }}')">
+                        <i class="bi bi-clipboard"></i> Скопировать
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Информация о вакансии -->
+        <div class="card card-modern mb-4">
+            <div class="card-header card-header-modern">
+                <h5 class="mb-0"><i class="bi bi-card-checklist"></i> Детали</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
+                        <span>ID вакансии</span>
+                        <span class="badge bg-secondary">{{ vacancy.hh_id }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
+                        <span>Дата публикации</span>
+                        <span>{{ vacancy.published_at|date:"d.m.Y H:i" }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
+                        <span>Тип графика</span>
+                        <span>{{ vacancy.schedule|default:"Не указано" }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
+                        <span>Валюта</span>
+                        <span>{{ vacancy.currency|default:"RUB" }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Похожие вакансии -->
+        {% if similar_vacancies %}
+        <div class="card card-modern">
+            <div class="card-header card-header-modern">
+                <h5 class="mb-0"><i class="bi bi-arrows-angle-contract"></i> Похожие вакансии</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for similar in similar_vacancies|slice:":3" %}
+                    <a href="{% url 'vacancy_detail' similar.hh_id %}" 
+                       class="list-group-item list-group-item-action border-0 py-3">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ similar.name|truncatechars:40 }}</h6>
+                        </div>
+                        <p class="mb-1 text-muted small">{{ similar.employer_name|truncatechars:30 }}</p>
+                        <small class="text-muted">{{ similar.area }}</small>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

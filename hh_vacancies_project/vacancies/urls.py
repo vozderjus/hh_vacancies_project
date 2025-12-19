@@ -9,13 +9,12 @@ urlpatterns = [
     path('search/', views.SearchView.as_view(), name='search'),
     path('import/', views.ImportVacanciesView.as_view(), name='import_vacancies'),
     path('statistics/', views.StatisticsView.as_view(), name='statistics'),
-    path('compare/', views.CompareVacanciesView.as_view(), name='compare'),
-    path('employer/<str:employer_name>/', views.EmployerDetailView.as_view(), name='employer_detail'),
     
     # API endpoints
     path('api/search/', views.api_vacancy_search, name='api_search'),
     path('api/stats/', views.api_get_statistics, name='api_stats'),
     
-    # Утилиты (только для разработки)
+    # Утилиты
     path('clear-db/', views.clear_database, name='clear_db'),
+    path('test-api/', views.test_api_view, name='test_api'),
 ]
