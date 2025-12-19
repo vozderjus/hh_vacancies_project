@@ -68,11 +68,37 @@
         <div class="card-body">
             <h5 class="card-title"><i class="bi bi-lightning"></i> Популярные запросы</h5>
             <div class="d-flex flex-wrap gap-2 mt-3">
-                {% for query in ['Python', 'JavaScript', 'Java', 'C#', 'PHP', 'Go', 'Data Science', 'DevOps', 'Frontend', 'Backend'] %}
-                <a href="{% url 'vacancy_list' %}?q={{ query }}" class="btn btn-outline-primary btn-sm">
-                    {{ query }}
+                <!-- Вариант 1: Просто перечислить вручную -->
+                <a href="{% url 'vacancy_list' %}?q=Python" class="btn btn-outline-primary btn-sm">
+                    Python
                 </a>
-                {% endfor %}
+                <a href="{% url 'vacancy_list' %}?q=JavaScript" class="btn btn-outline-primary btn-sm">
+                    JavaScript
+                </a>
+                <a href="{% url 'vacancy_list' %}?q=Java" class="btn btn-outline-primary btn-sm">
+                    Java
+                </a>
+                <a href="{% url 'vacancy_list' %}?q=C#" class="btn btn-outline-primary btn-sm">
+                    C#
+                </a>
+                <a href="{% url 'vacancy_list' %}?q=PHP" class="btn btn-outline-primary btn-sm">
+                    PHP
+                </a>
+                <a href="{% url 'vacancy_list' %}?q=Go" class="btn btn-outline-primary btn-sm">
+                    Go
+                </a>
+                <a href="{% url 'vacancy_list' %}?q=Data Science" class="btn btn-outline-primary btn-sm">
+                    Data Science
+                </a>
+                <a href="{% url 'vacancy_list' %}?q=DevOps" class="btn btn-outline-primary btn-sm">
+                    DevOps
+                </a>
+                <a href="{% url 'vacancy_list' %}?q=Frontend" class="btn btn-outline-primary btn-sm">
+                    Frontend
+                </a>
+                <a href="{% url 'vacancy_list' %}?q=Backend" class="btn btn-outline-primary btn-sm">
+                    Backend
+                </a>
             </div>
             
             <div class="mt-4">
