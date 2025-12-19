@@ -1,6 +1,187 @@
 {% extends 'vacancies/base.html' %}
 
+{% block page_title %}Поиск вакансий{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active">Вакансии</li>
+{% endblock %}
+
 {% block content %}
-<h2>Список вакансий</h2>
-<p>Здесь будет список вакансий</p>
+<div class="row">
+    <div class="col-lg-3">
+        <!-- Фильтры -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Фильтры</h6>
+            </div>
+            <div class="card-body">
+                <form method="get" id="filter-form">
+                    {% for field in search_form %}
+                    <div class="mb-3">
+                        <label class="form-label small">{{ field.label }}</label>
+                        {{ field }}
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search me-2"></i>Применить
+                        </button>
+                        <a href="{% url 'vacancy_list' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>Сбросить
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Быстрые фильтры -->
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-bolt me-2"></i>Быстрый поиск</h6>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    <a href="?experience=Без опыта" class="list-group-item list-group-item-action">
+                        <i class="fas fa-user-graduate me-2"></i>Без опыта
+                    </a>
+                    <a href="?area=Москва&salary_from=100000" class="list-group-item list-group-item-action">
+                        <i class="fas fa-ruble-sign me-2"></i>Москва от 100k
+                    </a>
+                    <a href="?employment=Удаленная работа" class="list-group-item list-group-item-action">
+                        <i class="fas fa-laptop-house me-2"></i>Удаленная работа
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-9">
+        <!-- Результаты поиска -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h4 class="mb-0">Найдено вакансий: {{ total_count }}</h4>
+                        {% if request.GET.q %}
+                        <p class="text-muted small mb-0">По запросу: "{{ request.GET.q }}"</p>
+                        {% endif %}
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" 
+                                data-bs-toggle="dropdown">
+                            <i class="fas fa-sort me-2"></i>Сортировка
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="?{{ search_params.urlencode }}&sort=-published_at">Сначала новые</a></li>
+                            <li><a class="dropdown-item" href="?{{ search_params.urlencode }}&sort=published_at">Сначала старые</a></li>
+                            <li><a class="dropdown-item" href="?{{ search_params.urlencode }}&sort=-salary_from">По убыванию зарплаты</a></li>
+                            <li><a class="dropdown-item" href="?{{ search_params.urlencode }}&sort=salary_from">По возрастанию зарплаты</a></li>
+                        </ul>
+                    </div>
+                </div>
+
+                {% if vacancies %}
+                <div class="row">
+                    {% for vacancy in vacancies %}
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100 vacancy-card">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h5 class="card-title">{{ vacancy.name|truncatechars:50 }}</h5>
+                                    <span class="badge bg-primary">{{ vacancy.employment|default:"-" }}</span>
+                                </div>
+                                
+                                <h6 class="card-subtitle mb-2 text-muted">
+                                    <i class="fas fa-building me-1"></i>{{ vacancy.employer_name|truncatechars:30 }}
+                                </h6>
+                                
+                                {% if vacancy.get_salary_display != "Не указана" %}
+                                <div class="salary-display mb-2">
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-money-bill-wave me-1"></i>
+                                        {{ vacancy.get_salary_display }}
+                                    </span>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="vacancy-info small text-muted mb-3">
+                                    <div><i class="fas fa-map-marker-alt me-1"></i>{{ vacancy.area|default:"-" }}</div>
+                                    <div><i class="fas fa-briefcase me-1"></i>{{ vacancy.experience|default:"-" }}</div>
+                                    <div><i class="fas fa-calendar me-1"></i>{{ vacancy.published_at|date:"d.m.Y" }}</div>
+                                </div>
+                                
+                                {% if vacancy.key_skills %}
+                                <div class="skills mb-3">
+                                    {% for skill in vacancy.key_skills|slice:":3" %}
+                                    <span class="badge bg-light text-dark border me-1 mb-1">{{ skill }}</span>
+                                    {% endfor %}
+                                    {% if vacancy.key_skills|length > 3 %}
+                                    <span class="badge bg-secondary">+{{ vacancy.key_skills|length|add:"-3" }}</span>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                
+                                <div class="d-flex justify-content-between">
+                                    <a href="{% url 'vacancy_detail' vacancy.hh_id %}" 
+                                       class="btn btn-primary btn-sm">
+                                        <i class="fas fa-eye me-1"></i>Подробнее
+                                    </a>
+                                    <a href="{{ vacancy.alternate_url }}" target="_blank" 
+                                       class="btn btn-outline-secondary btn-sm">
+                                        <i class="fab fa-hacker-news me-1"></i>На HH
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Пагинация -->
+                {% if page_obj.has_other_pages %}
+                <nav aria-label="Page navigation" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_params %}&{{ search_params.urlencode }}{% endif %}">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% if search_params %}&{{ search_params.urlencode }}{% endif %}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_params %}&{{ search_params.urlencode }}{% endif %}">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                    <h4>Вакансии не найдены</h4>
+                    <p class="text-muted">Попробуйте изменить параметры поиска или 
+                        <a href="{% url 'import_vacancies' %}">импортировать вакансии</a>.
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
