@@ -1,6 +1,72 @@
 {% extends 'vacancies/base.html' %}
 
+{% block title %}Статистика{% endblock %}
+
 {% block content %}
-<h2>Статистика</h2>
-<p>Здесь будет статистика по вакансиям</p>
+<div class="container mt-4">
+    <h1 class="mb-4"><i class="bi bi-graph-up"></i> Статистика</h1>
+    
+    <!-- Карточки статистики -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h1 class="display-5 text-primary">{{ total_vacancies|default:0 }}</h1>
+                    <p class="text-muted">Всего вакансий</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h1 class="display-5 text-success">{{ total_employers|default:0 }}</h1>
+                    <p class="text-muted">Работодателей</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h1 class="display-5 text-warning">{{ avg_salary|default:0|floatformat:0 }} ₽</h1>
+                    <p class="text-muted">Средняя зарплата</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h1 class="display-5 text-info">{{ max_salary|default:0|floatformat:0 }} ₽</h1>
+                    <p class="text-muted">Максимальная зарплата</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Топ работодателей -->
+    {% if top_employers %}
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h5 class="card-title"><i class="bi bi-building"></i> Топ работодателей</h5>
+            <div class="table-responsive mt-3">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Работодатель</th>
+                            <th>Количество вакансий</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for employer in top_employers %}
+                        <tr>
+                            <td>{{ employer.employer_name }}</td>
+                            <td><span class="badge bg-primary">{{ employer.count }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
 {% endblock %}

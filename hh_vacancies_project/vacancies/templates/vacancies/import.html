@@ -62,16 +62,39 @@
                 <div class="card-body">
                     <h6 class="card-title"><i class="bi bi-fire"></i> Популярные запросы</h6>
                     <div class="list-group list-group-flush mt-3">
-                        {% for query in ['Python разработчик', 'Java developer', 'Data Scientist', 'Менеджер проектов', 'Системный администратор', 'Дизайнер UI/UX'] %}
+                        <!-- Вручную перечислим -->
                         <form method="post" class="list-group-item list-group-item-action border-0 p-0">
                             {% csrf_token %}
-                            <input type="hidden" name="search_query" value="{{ query }}">
+                            <input type="hidden" name="search_query" value="Python разработчик">
                             <input type="hidden" name="count" value="20">
                             <button type="submit" class="btn btn-link text-start w-100 p-2 text-decoration-none">
-                                <i class="bi bi-search me-2"></i>{{ query }}
+                                <i class="bi bi-search me-2"></i>Python разработчик
                             </button>
                         </form>
-                        {% endfor %}
+                        <form method="post" class="list-group-item list-group-item-action border-0 p-0">
+                            {% csrf_token %}
+                            <input type="hidden" name="search_query" value="Java developer">
+                            <input type="hidden" name="count" value="20">
+                            <button type="submit" class="btn btn-link text-start w-100 p-2 text-decoration-none">
+                                <i class="bi bi-search me-2"></i>Java developer
+                            </button>
+                        </form>
+                        <form method="post" class="list-group-item list-group-item-action border-0 p-0">
+                            {% csrf_token %}
+                            <input type="hidden" name="search_query" value="Data Scientist">
+                            <input type="hidden" name="count" value="20">
+                            <button type="submit" class="btn btn-link text-start w-100 p-2 text-decoration-none">
+                                <i class="bi bi-search me-2"></i>Data Scientist
+                            </button>
+                        </form>
+                        <form method="post" class="list-group-item list-group-item-action border-0 p-0">
+                            {% csrf_token %}
+                            <input type="hidden" name="search_query" value="Менеджер проектов">
+                            <input type="hidden" name="count" value="20">
+                            <button type="submit" class="btn btn-link text-start w-100 p-2 text-decoration-none">
+                                <i class="bi bi-search me-2"></i>Менеджер проектов
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>
