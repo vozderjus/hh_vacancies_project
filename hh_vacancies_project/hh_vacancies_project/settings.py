@@ -21,8 +21,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
-    # Local apps
-    'vacancies.apps.VacanciesConfig',
+    # Ваше приложение
+    'vacancies',
 ]
 
 MIDDLEWARE = [
@@ -35,7 +35,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'hh_vacancies.urls'
+ROOT_URLCONF = 'hh_vacancies_project.urls'
 
 TEMPLATES = [
     {
@@ -54,7 +54,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'hh_vacancies.wsgi.application'
+WSGI_APPLICATION = 'hh_vacancies_project.wsgi.application'
 
 # Database
 DATABASES = {
